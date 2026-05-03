@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { CalendarClock, FileText, Loader2, LogOut, MapPin, MessageSquare, Plus, Stethoscope, Users } from "lucide-react";
+import { CalendarClock, FileText, Loader2, LogOut, MapPin, MessageSquare, Pencil, Plus, Save, Stethoscope, Trash2, Users, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiList, authStore } from "../lib/api";
@@ -136,12 +136,32 @@ export function AdminDashboard() {
 
 function DoctorsPanel({ doctors, onDone }: { doctors: Doctor[]; onDone: () => void }) {
   const [form, setForm] = useState({ name: "", specialization: "", bio: "", experienceYears: "0", phone: "", whatsapp: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const reset = () => {
+    setForm({ name: "", specialization: "", bio: "", experienceYears: "0", phone: "", whatsapp: "" });
+    setEditingId(null);
+  };
+  const startEdit = (doctor: Doctor) => {
+    setEditingId(doctor._id);
+    setForm({
+      name: doctor.name || "",
+      specialization: doctor.specialization || "",
+      bio: doctor.bio || "",
+      experienceYears: String(doctor.experienceYears ?? 0),
+      phone: doctor.phone || "",
+      whatsapp: doctor.whatsapp || "",
+    });
+  };
+  const body = { ...form, experienceYears: Number(form.experienceYears) };
+
   return (
     <Panel title="Doctors" icon={Stethoscope}>
       <form
-        onSubmit={(event) => submitForm(event, "/doctors", { ...form, experienceYears: Number(form.experienceYears) }, onDone, () =>
-          setForm({ name: "", specialization: "", bio: "", experienceYears: "0", phone: "", whatsapp: "" })
-        )}
+        onSubmit={(event) =>
+          editingId
+            ? submitUpdate(event, `/doctors/${editingId}`, body, onDone, reset)
+            : submitForm(event, "/doctors", body, onDone, reset)
+        }
         className="grid gap-3 md:grid-cols-2"
       >
         <Input label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
@@ -150,46 +170,112 @@ function DoctorsPanel({ doctors, onDone }: { doctors: Doctor[]; onDone: () => vo
         <Input label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
         <Input label="WhatsApp" value={form.whatsapp} onChange={(v) => setForm({ ...form, whatsapp: v })} />
         <Input label="Bio" value={form.bio} onChange={(v) => setForm({ ...form, bio: v })} />
-        <SubmitButton />
+        <FormActions editing={Boolean(editingId)} onCancel={reset} />
       </form>
-      <SimpleList items={doctors.map((d) => `${d.name} - ${d.specialization}`)} />
+      <RecordList
+        empty="No doctors yet."
+        items={doctors.map((doctor) => ({
+          id: doctor._id,
+          title: doctor.name,
+          detail: `${doctor.specialization} - ${doctor.experienceYears ?? 0} years`,
+          onEdit: () => startEdit(doctor),
+          onDelete: () => deleteRecord(`/doctors/${doctor._id}`, "Delete this doctor?", onDone),
+        }))}
+      />
     </Panel>
   );
 }
 
 function ClinicsPanel({ clinics, onDone }: { clinics: Clinic[]; onDone: () => void }) {
   const [form, setForm] = useState({ name: "", city: "", address: "", googleMapLink: "", contactNumber: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const reset = () => {
+    setForm({ name: "", city: "", address: "", googleMapLink: "", contactNumber: "" });
+    setEditingId(null);
+  };
+  const startEdit = (clinic: Clinic) => {
+    setEditingId(clinic._id);
+    setForm({
+      name: clinic.name || "",
+      city: clinic.city || "",
+      address: clinic.address || "",
+      googleMapLink: clinic.googleMapLink || "",
+      contactNumber: clinic.contactNumber || "",
+    });
+  };
+
   return (
     <Panel title="Clinics" icon={MapPin}>
-      <form onSubmit={(e) => submitForm(e, "/clinics", form, onDone, () => setForm({ name: "", city: "", address: "", googleMapLink: "", contactNumber: "" }))} className="grid gap-3 md:grid-cols-2">
+      <form
+        onSubmit={(e) =>
+          editingId
+            ? submitUpdate(e, `/clinics/${editingId}`, form, onDone, reset)
+            : submitForm(e, "/clinics", form, onDone, reset)
+        }
+        className="grid gap-3 md:grid-cols-2"
+      >
         <Input label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
         <Input label="City" value={form.city} onChange={(v) => setForm({ ...form, city: v })} />
         <Input label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} />
         <Input label="Google map link" value={form.googleMapLink} onChange={(v) => setForm({ ...form, googleMapLink: v })} />
         <Input label="Contact number" value={form.contactNumber} onChange={(v) => setForm({ ...form, contactNumber: v })} />
-        <SubmitButton />
+        <FormActions editing={Boolean(editingId)} onCancel={reset} />
       </form>
-      <SimpleList items={clinics.map((c) => `${c.city} - ${c.name}`)} />
+      <RecordList
+        empty="No clinics yet."
+        items={clinics.map((clinic) => ({
+          id: clinic._id,
+          title: `${clinic.city} - ${clinic.name}`,
+          detail: clinic.address,
+          onEdit: () => startEdit(clinic),
+          onDelete: () => deleteRecord(`/clinics/${clinic._id}`, "Delete this clinic?", onDone),
+        }))}
+      />
     </Panel>
   );
 }
 
 function RulesPanel({ doctors, clinics, rules, onDone }: { doctors: Doctor[]; clinics: Clinic[]; rules: ScheduleRule[]; onDone: () => void }) {
-  const [form, setForm] = useState({ doctorId: "", clinicId: "", type: "weekly", dayOfWeek: "0", nthWeek: "1", startTime: "10:00", endTime: "17:00" });
+  const [form, setForm] = useState({ doctorId: "", clinicId: "", type: "weekly", dayOfWeek: "0", nthWeek: "1", isActive: true, startTime: "10:00", endTime: "17:00" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const reset = () => {
+    setForm({ doctorId: "", clinicId: "", type: "weekly", dayOfWeek: "0", nthWeek: "1", isActive: true, startTime: "10:00", endTime: "17:00" });
+    setEditingId(null);
+  };
+  const startEdit = (rule: ScheduleRule) => {
+    setEditingId(rule._id);
+    setForm({
+      doctorId: getRecordId(rule.doctorId),
+      clinicId: getRecordId(rule.clinicId),
+      type: rule.type,
+      dayOfWeek: String(rule.dayOfWeek),
+      nthWeek: String(rule.nthWeek ?? 1),
+      isActive: rule.isActive,
+      startTime: rule.startTime,
+      endTime: rule.endTime,
+    });
+  };
   const payload = {
     doctorId: form.doctorId || doctors[0]?._id,
     clinicId: form.clinicId || clinics[0]?._id,
     type: form.type,
     dayOfWeek: Number(form.dayOfWeek),
     nthWeek: form.type === "monthly_nth_day" ? Number(form.nthWeek) : undefined,
-    isActive: true,
+    isActive: form.isActive,
     startTime: form.startTime,
     endTime: form.endTime,
   };
 
   return (
     <Panel title="Schedule rules" icon={CalendarClock}>
-      <form onSubmit={(e) => submitForm(e, "/schedule-rules", payload, onDone)} className="grid gap-3 md:grid-cols-2">
+      <form
+        onSubmit={(e) =>
+          editingId
+            ? submitUpdate(e, `/schedule-rules/${editingId}`, payload, onDone, reset)
+            : submitForm(e, "/schedule-rules", payload, onDone, reset)
+        }
+        className="grid gap-3 md:grid-cols-2"
+      >
         <Select label="Doctor" value={form.doctorId} onChange={(v) => setForm({ ...form, doctorId: v })} options={doctors.map((d) => ({ value: d._id, label: d.name }))} />
         <Select label="Clinic" value={form.clinicId} onChange={(v) => setForm({ ...form, clinicId: v })} options={clinics.map((c) => ({ value: c._id, label: `${c.city} - ${c.name}` }))} />
         <Select label="Type" value={form.type} onChange={(v) => setForm({ ...form, type: v })} options={[{ value: "weekly", label: "Weekly" }, { value: "monthly_nth_day", label: "Monthly nth day" }]} />
@@ -197,9 +283,22 @@ function RulesPanel({ doctors, clinics, rules, onDone }: { doctors: Doctor[]; cl
         {form.type === "monthly_nth_day" && <Input label="Nth week" type="number" value={form.nthWeek} onChange={(v) => setForm({ ...form, nthWeek: v })} />}
         <Input label="Start time" value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} />
         <Input label="End time" value={form.endTime} onChange={(v) => setForm({ ...form, endTime: v })} />
-        <SubmitButton />
+        <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-3 text-sm">
+          <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+          Active rule
+        </label>
+        <FormActions editing={Boolean(editingId)} onCancel={reset} />
       </form>
-      <SimpleList items={rules.map((r) => `${r.type} - ${dayNames[r.dayOfWeek]} - ${r.startTime} to ${r.endTime}`)} />
+      <RecordList
+        empty="No schedule rules yet."
+        items={rules.map((rule) => ({
+          id: rule._id,
+          title: `${rule.type === "weekly" ? "Weekly" : `Week ${rule.nthWeek}`} - ${dayNames[rule.dayOfWeek]}`,
+          detail: `${getClinicLabel(rule.clinicId, clinics)} - ${rule.startTime} to ${rule.endTime} - ${rule.isActive ? "Active" : "Inactive"}`,
+          onEdit: () => startEdit(rule),
+          onDelete: () => deleteRecord(`/schedule-rules/${rule._id}`, "Delete this schedule rule?", onDone),
+        }))}
+      />
       <ExceptionForm doctors={doctors} clinics={clinics} onDone={onDone} />
       <GenerateForm doctors={doctors} />
     </Panel>
@@ -248,6 +347,16 @@ function GenerateForm({ doctors }: { doctors: Doctor[] }) {
 }
 
 function AppointmentTable({ appointments, onStatus }: { appointments: Appointment[]; onStatus: () => void }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<{ status: Appointment["status"]; notes: string }>({ status: "pending", notes: "" });
+  const startEdit = (appointment: Appointment) => {
+    setEditingId(appointment._id);
+    setForm({ status: appointment.status, notes: appointment.notes || "" });
+  };
+  const reset = () => {
+    setEditingId(null);
+    setForm({ status: "pending", notes: "" });
+  };
   const updateStatus = async (id: string, status: Appointment["status"]) => {
     try {
       await api.patch(`/appointments/${id}`, { status }, true);
@@ -257,8 +366,47 @@ function AppointmentTable({ appointments, onStatus }: { appointments: Appointmen
       toast.error(error instanceof Error ? error.message : "Could not update appointment");
     }
   };
+  const updateAppointment = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingId) return;
+
+    try {
+      await api.patch(`/appointments/${editingId}`, form, true);
+      toast.success("Appointment updated");
+      reset();
+      onStatus();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update appointment");
+    }
+  };
+
   return (
     <Panel title="Appointments" icon={CalendarClock}>
+      {editingId && (
+        <form onSubmit={updateAppointment} className="mb-4 grid gap-3 rounded-lg bg-slate-50 p-3 md:grid-cols-[220px_1fr_auto]">
+          <Select
+            label="Status"
+            value={form.status}
+            onChange={(value) => setForm({ ...form, status: value as Appointment["status"] })}
+            options={[
+              { value: "pending", label: "Pending" },
+              { value: "confirmed", label: "Confirmed" },
+              { value: "cancelled", label: "Cancelled" },
+            ]}
+          />
+          <Input label="Notes" value={form.notes} onChange={(value) => setForm({ ...form, notes: value })} />
+          <div className="flex gap-2 self-end">
+            <button className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white">
+              <Save className="h-4 w-4" />
+              Save
+            </button>
+            <button type="button" onClick={reset} className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium">
+              <X className="h-4 w-4" />
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="text-slate-500">
@@ -269,6 +417,7 @@ function AppointmentTable({ appointments, onStatus }: { appointments: Appointmen
               <th>Date</th>
               <th>Time</th>
               <th>Status</th>
+              <th>Notes</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -281,9 +430,12 @@ function AppointmentTable({ appointments, onStatus }: { appointments: Appointmen
                 <td>{item.date?.slice(0, 10)}</td>
                 <td>{item.time}</td>
                 <td><span className="rounded-full bg-slate-100 px-2 py-1 text-xs capitalize">{item.status}</span></td>
-                <td className="flex gap-2 py-2">
+                <td className="max-w-48 truncate">{item.notes || "-"}</td>
+                <td className="flex flex-wrap gap-2 py-2">
                   <button onClick={() => updateStatus(item._id, "confirmed")} className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">Confirm</button>
                   <button onClick={() => updateStatus(item._id, "cancelled")} className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">Cancel</button>
+                  <IconButton label="Edit" onClick={() => startEdit(item)} icon={Pencil} />
+                  <IconButton label="Delete" danger onClick={() => deleteRecord(`/appointments/${item._id}`, "Delete this appointment?", onStatus)} icon={Trash2} />
                 </td>
               </tr>
             ))}
@@ -298,6 +450,17 @@ function AppointmentTable({ appointments, onStatus }: { appointments: Appointmen
 function ContentPanel({ blogs, testimonials, onDone }: { blogs: Blog[]; testimonials: Testimonial[]; onDone: () => void }) {
   const [blog, setBlog] = useState({ title: "", slug: "", content: "", featuredImage: "", tags: "" });
   const [testimonial, setTestimonial] = useState({ patientName: "", message: "", rating: "5" });
+  const [editingTestimonialId, setEditingTestimonialId] = useState<string | null>(null);
+  const resetTestimonial = () => {
+    setTestimonial({ patientName: "", message: "", rating: "5" });
+    setEditingTestimonialId(null);
+  };
+  const startTestimonialEdit = (item: Testimonial) => {
+    setEditingTestimonialId(item._id);
+    setTestimonial({ patientName: item.patientName, message: item.message, rating: String(item.rating) });
+  };
+  const testimonialBody = { ...testimonial, rating: Number(testimonial.rating) };
+
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Panel title="Blogs" icon={FileText}>
@@ -309,16 +472,40 @@ function ContentPanel({ blogs, testimonials, onDone }: { blogs: Blog[]; testimon
           <Input label="Tags comma separated" value={blog.tags} onChange={(v) => setBlog({ ...blog, tags: v })} />
           <SubmitButton />
         </form>
-        <SimpleList items={blogs.map((b) => b.title)} />
+        <RecordList
+          empty="No blogs yet."
+          items={blogs.map((item) => ({
+            id: item._id,
+            title: item.title,
+            detail: item.slug,
+            onDelete: () => deleteRecord(`/blogs/${item._id}`, "Delete this blog?", onDone),
+          }))}
+        />
       </Panel>
       <Panel title="Testimonials" icon={MessageSquare}>
-        <form onSubmit={(e) => submitForm(e, "/testimonials", { ...testimonial, rating: Number(testimonial.rating) }, onDone)} className="space-y-3">
+        <form
+          onSubmit={(e) =>
+            editingTestimonialId
+              ? submitUpdate(e, `/testimonials/${editingTestimonialId}`, testimonialBody, onDone, resetTestimonial)
+              : submitForm(e, "/testimonials", testimonialBody, onDone, resetTestimonial)
+          }
+          className="space-y-3"
+        >
           <Input label="Patient name" value={testimonial.patientName} onChange={(v) => setTestimonial({ ...testimonial, patientName: v })} />
           <Textarea label="Message" value={testimonial.message} onChange={(v) => setTestimonial({ ...testimonial, message: v })} />
           <Input label="Rating" type="number" value={testimonial.rating} onChange={(v) => setTestimonial({ ...testimonial, rating: v })} />
-          <SubmitButton />
+          <FormActions editing={Boolean(editingTestimonialId)} onCancel={resetTestimonial} />
         </form>
-        <SimpleList items={testimonials.map((t) => `${t.patientName} - ${t.rating}/5`)} />
+        <RecordList
+          empty="No testimonials yet."
+          items={testimonials.map((item) => ({
+            id: item._id,
+            title: item.patientName,
+            detail: `${item.rating}/5 - ${item.message}`,
+            onEdit: () => startTestimonialEdit(item),
+            onDelete: () => deleteRecord(`/testimonials/${item._id}`, "Delete this testimonial?", onDone),
+          }))}
+        />
       </Panel>
     </div>
   );
@@ -336,6 +523,45 @@ async function submitForm(event: FormEvent, path: string, body: unknown, onDone:
   }
 }
 
+async function submitUpdate(event: FormEvent, path: string, body: unknown, onDone: () => void, reset?: () => void) {
+  event.preventDefault();
+  try {
+    await api.patch(path, body, true);
+    toast.success("Updated successfully");
+    reset?.();
+    onDone();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Update failed");
+  }
+}
+
+async function deleteRecord(path: string, message: string, onDone: () => void) {
+  if (!window.confirm(message)) {
+    return;
+  }
+
+  try {
+    await api.delete(path, true);
+    toast.success("Deleted successfully");
+    onDone();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Delete failed");
+  }
+}
+
+function getRecordId(record: Doctor | Clinic | string) {
+  return typeof record === "string" ? record : record._id;
+}
+
+function getClinicLabel(record: Clinic | string, clinics: Clinic[]) {
+  if (typeof record !== "string") {
+    return `${record.city} - ${record.name}`;
+  }
+
+  const clinic = clinics.find((item) => item._id === record);
+  return clinic ? `${clinic.city} - ${clinic.name}` : record;
+}
+
 function Panel({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4">
@@ -345,6 +571,23 @@ function Panel({ title, icon: Icon, children }: { title: string; icon: LucideIco
       </div>
       {children}
     </section>
+  );
+}
+
+function FormActions({ editing, onCancel }: { editing: boolean; onCancel: () => void }) {
+  return (
+    <div className="flex flex-wrap gap-2 md:self-end">
+      <button className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-medium text-white">
+        {editing ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+        {editing ? "Update" : "Save"}
+      </button>
+      {editing && (
+        <button type="button" onClick={onCancel} className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-5 py-3 font-medium text-slate-700">
+          <X className="h-4 w-4" />
+          Cancel
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -386,13 +629,43 @@ function SubmitButton({ label = "Save" }: { label?: string }) {
   );
 }
 
-function SimpleList({ items }: { items: string[] }) {
+function IconButton({ label, icon: Icon, onClick, danger = false }: { label: string; icon: LucideIcon; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      onClick={onClick}
+      className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border ${
+        danger ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-700"
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+}
+
+function RecordList({
+  items,
+  empty,
+}: {
+  empty: string;
+  items: Array<{ id: string; title: string; detail?: string; onEdit?: () => void; onDelete?: () => void }>;
+}) {
   return (
     <div className="mt-5 space-y-2">
-      {items.map((item, index) => (
-        <div key={`${item}-${index}`} className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{item}</div>
+      {items.map((item) => (
+        <div key={item.id} className="flex flex-col gap-3 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="font-medium text-slate-900">{item.title}</p>
+            {item.detail && <p className="mt-1 truncate text-xs text-slate-500">{item.detail}</p>}
+          </div>
+          <div className="flex shrink-0 gap-2">
+            {item.onEdit && <IconButton label="Edit" icon={Pencil} onClick={item.onEdit} />}
+            {item.onDelete && <IconButton label="Delete" icon={Trash2} danger onClick={item.onDelete} />}
+          </div>
+        </div>
       ))}
-      {items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">No records yet.</p>}
+      {items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 p-4 text-sm text-slate-500">{empty}</p>}
     </div>
   );
 }
