@@ -1,6 +1,24 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { CalendarClock, FileText, Loader2, LogOut, MapPin, MessageSquare, Pencil, Plus, Save, Stethoscope, Trash2, Users, X } from "lucide-react";
+import {
+  Bold,
+  CalendarClock,
+  FileText,
+  Italic,
+  List,
+  ListOrdered,
+  Loader2,
+  LogOut,
+  MapPin,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Save,
+  Stethoscope,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiList, authStore } from "../lib/api";
@@ -450,7 +468,22 @@ function AppointmentTable({ appointments, onStatus }: { appointments: Appointmen
 function ContentPanel({ blogs, testimonials, onDone }: { blogs: Blog[]; testimonials: Testimonial[]; onDone: () => void }) {
   const [blog, setBlog] = useState({ title: "", slug: "", content: "", featuredImage: "", tags: "" });
   const [testimonial, setTestimonial] = useState({ patientName: "", message: "", rating: "5" });
+  const [editingBlogId, setEditingBlogId] = useState<string | null>(null);
   const [editingTestimonialId, setEditingTestimonialId] = useState<string | null>(null);
+  const resetBlog = () => {
+    setBlog({ title: "", slug: "", content: "", featuredImage: "", tags: "" });
+    setEditingBlogId(null);
+  };
+  const startBlogEdit = (item: Blog) => {
+    setEditingBlogId(item._id);
+    setBlog({
+      title: item.title,
+      slug: item.slug,
+      content: item.content,
+      featuredImage: item.featuredImage || "",
+      tags: item.tags?.join(", ") || "",
+    });
+  };
   const resetTestimonial = () => {
     setTestimonial({ patientName: "", message: "", rating: "5" });
     setEditingTestimonialId(null);
@@ -459,18 +492,26 @@ function ContentPanel({ blogs, testimonials, onDone }: { blogs: Blog[]; testimon
     setEditingTestimonialId(item._id);
     setTestimonial({ patientName: item.patientName, message: item.message, rating: String(item.rating) });
   };
+  const blogBody = { ...blog, tags: blog.tags.split(",").map((t) => t.trim()).filter(Boolean) };
   const testimonialBody = { ...testimonial, rating: Number(testimonial.rating) };
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Panel title="Blogs" icon={FileText}>
-        <form onSubmit={(e) => submitForm(e, "/blogs", { ...blog, tags: blog.tags.split(",").map((t) => t.trim()).filter(Boolean) }, onDone)} className="space-y-3">
+        <form
+          onSubmit={(e) =>
+            editingBlogId
+              ? submitUpdate(e, `/blogs/${editingBlogId}`, blogBody, onDone, resetBlog)
+              : submitForm(e, "/blogs", blogBody, onDone, resetBlog)
+          }
+          className="space-y-3"
+        >
           <Input label="Title" value={blog.title} onChange={(v) => setBlog({ ...blog, title: v })} />
           <Input label="Slug" value={blog.slug} onChange={(v) => setBlog({ ...blog, slug: v })} />
           <Input label="Featured image" value={blog.featuredImage} onChange={(v) => setBlog({ ...blog, featuredImage: v })} />
-          <Textarea label="Content" value={blog.content} onChange={(v) => setBlog({ ...blog, content: v })} />
+          <FormattedTextarea label="Content" value={blog.content} onChange={(v) => setBlog({ ...blog, content: v })} />
           <Input label="Tags comma separated" value={blog.tags} onChange={(v) => setBlog({ ...blog, tags: v })} />
-          <SubmitButton />
+          <FormActions editing={Boolean(editingBlogId)} onCancel={resetBlog} />
         </form>
         <RecordList
           empty="No blogs yet."
@@ -478,6 +519,7 @@ function ContentPanel({ blogs, testimonials, onDone }: { blogs: Blog[]; testimon
             id: item._id,
             title: item.title,
             detail: item.slug,
+            onEdit: () => startBlogEdit(item),
             onDelete: () => deleteRecord(`/blogs/${item._id}`, "Delete this blog?", onDone),
           }))}
         />
@@ -606,6 +648,56 @@ function Textarea({ label, value, onChange }: { label: string; value: string; on
       {label}
       <textarea value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 min-h-28 w-full rounded-lg border border-slate-300 px-3 py-3 font-normal outline-none focus:border-emerald-500" />
     </label>
+  );
+}
+
+function FormattedTextarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const appendFormat = (type: "bold" | "italic" | "bullet" | "numbered") => {
+    const nextValue = (() => {
+      if (type === "bold") return `${value}${value.endsWith("\n") || !value ? "" : "\n"}**Bold text**`;
+      if (type === "italic") return `${value}${value.endsWith("\n") || !value ? "" : "\n"}*Italic text*`;
+      if (type === "bullet") return `${value}${value.endsWith("\n") || !value ? "" : "\n"}- First point\n- Second point`;
+      return `${value}${value.endsWith("\n") || !value ? "" : "\n"}1. First point\n2. Second point`;
+    })();
+
+    onChange(nextValue);
+  };
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">{label}</span>
+        <div className="flex flex-wrap gap-2">
+          <FormatButton label="Bold" icon={Bold} onClick={() => appendFormat("bold")} />
+          <FormatButton label="Italic" icon={Italic} onClick={() => appendFormat("italic")} />
+          <FormatButton label="Bullets" icon={List} onClick={() => appendFormat("bullet")} />
+          <FormatButton label="Numbers" icon={ListOrdered} onClick={() => appendFormat("numbered")} />
+        </div>
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Write content. Use **bold**, *italic*, - bullets, and 1. numbered points."
+        className="min-h-56 w-full rounded-lg border border-slate-300 px-3 py-3 font-normal leading-7 outline-none focus:border-emerald-500"
+      />
+      <p className="mt-2 text-xs text-slate-500">
+        Supported formatting: **bold**, *italic*, - bullet points, and 1. numbered points.
+      </p>
+    </div>
+  );
+}
+
+function FormatButton({ label, icon: Icon, onClick }: { label: string; icon: LucideIcon; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      onClick={onClick}
+      className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700"
+    >
+      <Icon className="h-4 w-4" />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
   );
 }
 

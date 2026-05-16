@@ -190,14 +190,27 @@ export function Home() {
             </div>
           </div>
           <div>
-            <h2 className="mb-4 text-xl font-semibold">Latest blogs</h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold">Latest blogs</h2>
+              <Link to="/blogs" className="text-sm font-medium text-emerald-700">
+                View all
+              </Link>
+            </div>
             <div className="space-y-3">
               {blogs.slice(0, 3).map((blog) => (
-                <article key={blog._id} className="rounded-lg border border-slate-200 bg-white p-4">
+                <Link
+                  key={blog._id}
+                  to={`/blogs/${blog.slug}`}
+                  className="block rounded-lg border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-md"
+                >
                   <p className="text-sm text-emerald-700">{blog.tags?.join(", ") || "Clinic update"}</p>
                   <h3 className="mt-1 font-semibold">{blog.title}</h3>
                   <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{blog.content}</p>
-                </article>
+                  <span className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-emerald-700">
+                    Read full article
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
+                </Link>
               ))}
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from "react-router";
-import { CalendarCheck, LayoutDashboard, Stethoscope } from "lucide-react";
+import { CalendarCheck, FileText, LayoutDashboard, Stethoscope } from "lucide-react";
 
 export function Root() {
   return (
@@ -30,6 +30,15 @@ export function Root() {
               }
             >
               Booking
+            </NavLink>
+            <NavLink
+              to="/blogs"
+              className={({ isActive }) =>
+                `rounded-lg px-3 py-2 ${isActive ? "bg-emerald-50 text-emerald-700" : "text-slate-600"}`
+              }
+            >
+              <FileText className="h-4 w-4 sm:hidden" />
+              <span className="hidden sm:inline">Blogs</span>
             </NavLink>
             <NavLink
               to="/admin"

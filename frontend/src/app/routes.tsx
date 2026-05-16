@@ -3,6 +3,8 @@ import { Root } from "./components/Root";
 import { Home } from "./components/Home";
 import { Schedule } from "./components/Schedule";
 import { Booking } from "./components/Booking";
+import { BlogDetail } from "./components/BlogDetail";
+import { Blogs } from "./components/Blogs";
 import { AdminLogin } from "./components/AdminLogin";
 import { AdminDashboard } from "./components/AdminDashboard";
 import { RequireAdmin } from "./components/RequireAdmin";
@@ -15,6 +17,8 @@ export const router = createBrowserRouter([
       { index: true, Component: Home },
       { path: "schedule", Component: Schedule },
       { path: "booking", Component: Booking },
+      { path: "blogs", Component: Blogs },
+      { path: "blogs/:slug", Component: BlogDetail },
       { path: "admin/login", Component: AdminLogin },
       {
         path: "admin",
