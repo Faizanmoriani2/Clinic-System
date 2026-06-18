@@ -69,6 +69,17 @@ export type Testimonial = {
   rating: number;
 };
 
+export type Exception = {
+  _id: Id;
+  doctorId: Doctor | Id | null;
+  clinicId?: Clinic | Id | null;
+  date: string;
+  isCancelled: boolean;
+  startTime?: string;
+  endTime?: string;
+  reason?: string;
+};
+
 export type ScheduleRule = {
   _id: Id;
   doctorId: Doctor | Id;

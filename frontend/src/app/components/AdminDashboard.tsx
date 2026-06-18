@@ -22,7 +22,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiList, authStore } from "../lib/api";
-import type { Appointment, Blog, Clinic, Doctor, Patient, ScheduleRule, Testimonial } from "../lib/types";
+import type { Appointment, Blog, Clinic, Doctor, Exception, Patient, ScheduleRule, Testimonial } from "../lib/types";
 import { todayKey } from "../lib/dates";
 
 type Tab = "overview" | "doctors" | "clinics" | "rules" | "appointments" | "content";
@@ -35,6 +35,7 @@ export function AdminDashboard() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [rules, setRules] = useState<ScheduleRule[]>([]);
+  const [exceptions, setExceptions] = useState<Exception[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [blogs, setBlogs] = useState<Blog[]>([]);
@@ -44,10 +45,11 @@ export function AdminDashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const [doctorRes, clinicRes, ruleRes, appointmentRes, patientRes, blogRes, testimonialRes] = await Promise.all([
+      const [doctorRes, clinicRes, ruleRes, exceptionRes, appointmentRes, patientRes, blogRes, testimonialRes] = await Promise.all([
         api.get<ApiList<Doctor>>("/doctors"),
         api.get<ApiList<Clinic>>("/clinics"),
         api.get<ApiList<ScheduleRule>>("/schedule-rules"),
+        api.get<ApiList<Exception>>("/exceptions", true),
         api.get<ApiList<Appointment>>("/appointments", true),
         api.get<ApiList<Patient>>("/patients", true),
         api.get<ApiList<Blog>>("/blogs"),
@@ -56,6 +58,7 @@ export function AdminDashboard() {
       setDoctors(doctorRes.data);
       setClinics(clinicRes.data);
       setRules(ruleRes.data);
+      setExceptions(exceptionRes.data);
       setAppointments(appointmentRes.data);
       setPatients(patientRes.data);
       setBlogs(blogRes.data);
@@ -140,7 +143,7 @@ export function AdminDashboard() {
 
             {tab === "doctors" && <DoctorsPanel doctors={doctors} onDone={load} />}
             {tab === "clinics" && <ClinicsPanel clinics={clinics} onDone={load} />}
-            {tab === "rules" && <RulesPanel doctors={doctors} clinics={clinics} rules={rules} onDone={load} />}
+            {tab === "rules" && <RulesPanel doctors={doctors} clinics={clinics} rules={rules} exceptions={exceptions} onDone={load} />}
             {tab === "appointments" && <AppointmentTable appointments={appointments} onStatus={load} />}
             {tab === "content" && (
               <ContentPanel blogs={blogs} testimonials={testimonials} onDone={load} />
@@ -253,7 +256,19 @@ function ClinicsPanel({ clinics, onDone }: { clinics: Clinic[]; onDone: () => vo
   );
 }
 
-function RulesPanel({ doctors, clinics, rules, onDone }: { doctors: Doctor[]; clinics: Clinic[]; rules: ScheduleRule[]; onDone: () => void }) {
+function RulesPanel({
+  doctors,
+  clinics,
+  rules,
+  exceptions,
+  onDone,
+}: {
+  doctors: Doctor[];
+  clinics: Clinic[];
+  rules: ScheduleRule[];
+  exceptions: Exception[];
+  onDone: () => void;
+}) {
   const [form, setForm] = useState({ doctorId: "", clinicId: "", type: "weekly", dayOfWeek: "0", nthWeek: "1", isActive: true, startTime: "10:00", endTime: "17:00" });
   const [editingId, setEditingId] = useState<string | null>(null);
   const reset = () => {
@@ -317,29 +332,86 @@ function RulesPanel({ doctors, clinics, rules, onDone }: { doctors: Doctor[]; cl
           onDelete: () => deleteRecord(`/schedule-rules/${rule._id}`, "Delete this schedule rule?", onDone),
         }))}
       />
-      <ExceptionForm doctors={doctors} clinics={clinics} onDone={onDone} />
+      <ExceptionForm doctors={doctors} clinics={clinics} exceptions={exceptions} onDone={onDone} />
       <GenerateForm doctors={doctors} />
     </Panel>
   );
 }
 
-function ExceptionForm({ doctors, clinics, onDone }: { doctors: Doctor[]; clinics: Clinic[]; onDone: () => void }) {
+function ExceptionForm({
+  doctors,
+  clinics,
+  exceptions,
+  onDone,
+}: {
+  doctors: Doctor[];
+  clinics: Clinic[];
+  exceptions: Exception[];
+  onDone: () => void;
+}) {
   const [form, setForm] = useState({ doctorId: "", clinicId: "", date: todayKey(), isCancelled: false, startTime: "10:00", endTime: "17:00", reason: "" });
+  const reset = () => {
+    setForm({ doctorId: "", clinicId: "", date: todayKey(), isCancelled: false, startTime: "10:00", endTime: "17:00", reason: "" });
+  };
+  const body = {
+    ...form,
+    doctorId: form.doctorId || doctors[0]?._id,
+    clinicId: form.isCancelled ? undefined : form.clinicId || clinics[0]?._id,
+    startTime: form.isCancelled ? "" : form.startTime,
+    endTime: form.isCancelled ? "" : form.endTime,
+  };
+
   return (
-    <form
-      onSubmit={(e) => submitForm(e, "/exceptions", { ...form, doctorId: form.doctorId || doctors[0]?._id, clinicId: form.clinicId || clinics[0]?._id }, onDone)}
-      className="mt-5 grid gap-3 border-t border-slate-200 pt-5 md:grid-cols-2"
-    >
-      <h3 className="font-semibold md:col-span-2">Add exception</h3>
-      <Select label="Doctor" value={form.doctorId} onChange={(v) => setForm({ ...form, doctorId: v })} options={doctors.map((d) => ({ value: d._id, label: d.name }))} />
-      <Select label="Clinic" value={form.clinicId} onChange={(v) => setForm({ ...form, clinicId: v })} options={clinics.map((c) => ({ value: c._id, label: c.city }))} />
-      <Input label="Date" type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
-      <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-3 text-sm"><input type="checkbox" checked={form.isCancelled} onChange={(e) => setForm({ ...form, isCancelled: e.target.checked })} /> Cancel visit</label>
-      <Input label="Start time" value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} />
-      <Input label="End time" value={form.endTime} onChange={(v) => setForm({ ...form, endTime: v })} />
-      <Input label="Reason" value={form.reason} onChange={(v) => setForm({ ...form, reason: v })} />
-      <SubmitButton label="Save exception" />
-    </form>
+    <div className="mt-5 border-t border-slate-200 pt-5">
+      <form
+        onSubmit={(e) => submitForm(e, "/exceptions", body, onDone, reset)}
+        className="grid gap-3 md:grid-cols-2"
+      >
+        <div className="md:col-span-2">
+          <h3 className="font-semibold">Add exception</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Use this when the doctor cancels a specific date or changes clinic/timing for only that date. This is checked before regular rules.
+          </p>
+        </div>
+        <Select label="Doctor" value={form.doctorId} onChange={(v) => setForm({ ...form, doctorId: v })} options={doctors.map((d) => ({ value: d._id, label: d.name }))} />
+        <Input label="Date" type="date" value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+        <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-3 text-sm md:col-span-2">
+          <input type="checkbox" checked={form.isCancelled} onChange={(e) => setForm({ ...form, isCancelled: e.target.checked })} />
+          Cancel doctor visit for this date
+        </label>
+        {!form.isCancelled && (
+          <>
+            <Select label="Clinic override" value={form.clinicId} onChange={(v) => setForm({ ...form, clinicId: v })} options={clinics.map((c) => ({ value: c._id, label: `${c.city} - ${c.name}` }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Start time" value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} />
+              <Input label="End time" value={form.endTime} onChange={(v) => setForm({ ...form, endTime: v })} />
+            </div>
+          </>
+        )}
+        <Input label="Reason" value={form.reason} onChange={(v) => setForm({ ...form, reason: v })} />
+        <SubmitButton label="Save exception" />
+      </form>
+
+      <div className="mt-5">
+        <h3 className="mb-3 font-semibold">Created exceptions</h3>
+        <RecordList
+          empty="No exceptions yet."
+          items={exceptions.map((exception) => ({
+            id: exception._id,
+            title: `${exception.date?.slice(0, 10)} - ${exception.isCancelled ? "Cancelled visit" : "Clinic/time override"}`,
+            detail: [
+              getDoctorLabel(exception.doctorId, doctors),
+              exception.isCancelled ? "Doctor not available" : getOptionalClinicLabel(exception.clinicId, clinics),
+              exception.isCancelled ? "" : `${exception.startTime || "10:00"} to ${exception.endTime || "17:00"}`,
+              exception.reason || "",
+            ]
+              .filter(Boolean)
+              .join(" - "),
+            onDelete: () => deleteRecord(`/exceptions/${exception._id}`, "Delete this exception?", onDone),
+          }))}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -591,17 +663,45 @@ async function deleteRecord(path: string, message: string, onDone: () => void) {
   }
 }
 
-function getRecordId(record: Doctor | Clinic | string) {
+function getRecordId(record: Doctor | Clinic | string | null | undefined) {
+  if (!record) {
+    return "";
+  }
+
   return typeof record === "string" ? record : record._id;
 }
 
-function getClinicLabel(record: Clinic | string, clinics: Clinic[]) {
+function getDoctorLabel(record: Doctor | string | null | undefined, doctors: Doctor[]) {
+  if (!record) {
+    return "Deleted doctor";
+  }
+
   if (typeof record !== "string") {
-    return `${record.city} - ${record.name}`;
+    return record.name || "Unnamed doctor";
+  }
+
+  return doctors.find((item) => item._id === record)?.name || record;
+}
+
+function getClinicLabel(record: Clinic | string | null | undefined, clinics: Clinic[]) {
+  if (!record) {
+    return "Deleted clinic";
+  }
+
+  if (typeof record !== "string") {
+    return `${record.city || "Unknown city"} - ${record.name || "Unnamed clinic"}`;
   }
 
   const clinic = clinics.find((item) => item._id === record);
   return clinic ? `${clinic.city} - ${clinic.name}` : record;
+}
+
+function getOptionalClinicLabel(record: Clinic | string | null | undefined, clinics: Clinic[]) {
+  if (!record) {
+    return "No clinic selected";
+  }
+
+  return getClinicLabel(record, clinics);
 }
 
 function Panel({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: React.ReactNode }) {
